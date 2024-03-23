@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import org.duckdns.auby.reindev.auth.DuckServer;
+import org.duckdns.auby.reindev.auth.CommandListPacket;
 
 @Mixin(NetServerHandler.class)
 public abstract class MixinNetServerHandler {
@@ -29,6 +30,13 @@ public abstract class MixinNetServerHandler {
 	public abstract void teleportTo(double x, double y, double z, float yaw, float pitch);
 
 	public boolean verified = false;
+
+	//@Inject(method="sendPacket",at=@At(value="HEAD"),cancellable=true)
+	//public void sendPacket2(Packet p, CallbackInfo ci) {
+	//	if(p instanceof Packet252CommandList) {
+	//		p = new Packet252CommandListDuck();
+	//	}
+	//}
 
 	@Inject(method="handleFlying",at=@At(value="HEAD"),cancellable=true)
 	public void handleFlying(Packet10Flying p10f, CallbackInfo ci) {
@@ -73,6 +81,7 @@ public abstract class MixinNetServerHandler {
 			verified = a.isDuckVerified(playerEntity.username);
 			if(verified) {
 				if(qp13 != null) sendPacket(qp13);
+				sendPacket(new Packet252CommandList());
 			}
 			ci.cancel();
 		}
@@ -90,6 +99,9 @@ public abstract class MixinNetServerHandler {
 			r.yPosition = 256;
 			r.zPosition = 0;
 			r.onGround = false;
+		}else if(p.getClass() == Packet252CommandList.class) {
+			System.out.println("yoy");
+			ci.cancel();
 		}
 	//	else if(p instanceof Packet) { qp = p; ci.cancel(); }
 	}

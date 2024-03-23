@@ -20,6 +20,7 @@ import net.minecraft.src.game.level.chunk.ChunkCoordinates;
 
 class BruhInfo {
 	public boolean logged_in = false;
+	public boolean confirming = false;
 	public boolean has_pass = false;
 	public EntityPlayerMP ep;
 	public double spX;
@@ -61,6 +62,8 @@ public class DuckServer extends DuckMod implements ServerMod {
 	}
 	private static DuckServer theduck;
 
+	private Integer tick_timer_welcome = 0;
+
 	public static DuckServer getInstance() {
 		return theduck;
 	}
@@ -68,7 +71,6 @@ public class DuckServer extends DuckMod implements ServerMod {
 		theduck = this;
 		if (!duckdir.exists() && !duckdir.mkdirs()) {
 			lmaogger.log(Level.SEVERE, "failed to create config directory :(( at "+duckdir.toString());
-			// don't bother shutting down correctly since i have no idea how to do that (patches welcome)
 			System.exit(1);
 		}
 		loadMap();
@@ -79,7 +81,20 @@ public class DuckServer extends DuckMod implements ServerMod {
 	public void onPreInit() {}
 
 	@Override
-	public void onTick() {}
+	public void onTick() {
+		if(tick_timer_welcome++ > 100) {
+			tick_timer_welcome = 0;
+			for (Map.Entry<String, BruhInfo> entry : duckmap.entrySet()) {
+				BruhInfo bruh = entry.getValue();
+				if(bruh.logged_in || bruh.confirming || bruh.ep == null) continue;
+				if(bruh.has_pass) {
+					bruh.ep.playerNetServerHandler.sendPacket(new Packet3Chat(duckprop.getProperty("string_login")));
+				} else {
+					bruh.ep.playerNetServerHandler.sendPacket(new Packet3Chat(duckprop.getProperty("string_register")));
+				}
+			}
+		}
+	}
 
 	public boolean onDuckJoin(String username, EntityPlayerMP ep) {
 		BruhInfo bruh;
@@ -92,14 +107,8 @@ public class DuckServer extends DuckMod implements ServerMod {
 		if(bruh.ep == null) {
 		//	lmaogger.log(Level.INFO, "this fine individual named "+username+" just joined..!");
 			bruh.ep = ep;
-
 			ep.capabilities.disableDamage = true;
-
-			if(bruh.has_pass) {
-				ep.playerNetServerHandler.sendPacket(new Packet3Chat(duckprop.getProperty("string_login")));
-			} else {
-				ep.playerNetServerHandler.sendPacket(new Packet3Chat(duckprop.getProperty("string_register")));
-			}
+			ep.playerNetServerHandler.sendPacket(new CommandListPacket());
 			return false;
 		} else {
 			return this.isDuckVerified(username);
@@ -120,7 +129,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 		if(arr.startsWith("/")) {
 			String[] arrgs = arr.split(" ", 2);
 			String cmd = arrgs[0];
-			lmaogger.log(Level.INFO, "("+username+": /"+cmd+" ...)");
+			lmaogger.log(Level.INFO, "("+username+": "+cmd+" ...)");
 			String arg = arrgs.length>1 ? arrgs[1].trim() : "";
 			if(cmd.equals("/login")) {
 				if(arg.equals("")) {
@@ -144,6 +153,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 				}
 				if(!a.has_pass) {
 					a.pass_confirm = hash(arg);
+					a.confirming = true;
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_register_confirm")));
 				} else {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_register_entry_exists")));
@@ -153,7 +163,9 @@ public class DuckServer extends DuckMod implements ServerMod {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_usage_confirm")));
 					return;
 				}
-				if(Arrays.equals(a.pass_confirm, hash(arg))) {
+				if(!a.confirming) {
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_confirm_register_first")));
+				}else if(Arrays.equals(a.pass_confirm, hash(arg))) {
 					verifyPlayer(username);
 					a.pass = a.pass_confirm;
 					a.has_pass = true;
