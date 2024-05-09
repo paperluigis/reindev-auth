@@ -12,11 +12,14 @@ import java.security.MessageDigest;
 
 import com.fox2code.foxloader.loader.ModLoader;
 import com.fox2code.foxloader.loader.ServerMod;
+import com.fox2code.foxloader.registry.CommandCompat;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.src.server.packets.*;
 import net.minecraft.src.game.entity.player.EntityPlayerMP;
 import net.minecraft.src.game.level.WorldServer;
 import net.minecraft.src.game.level.chunk.ChunkCoordinates;
+
+import org.duckdns.auby.reindev.auth.commands.*;
 
 class BruhInfo {
 	public boolean logged_in = false;
@@ -41,6 +44,7 @@ class BruhInfo {
 		}
 	}
 }
+
 public class DuckServer extends DuckMod implements ServerMod {
 	private final static File duckdir = new File(ModLoader.config, "duckyauth");
 	private final static File duckfile = new File(duckdir, "pass.txt");
@@ -49,7 +53,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 	private final static Logger lmaogger = Logger.getLogger(Logger.GLOBAL_LOGGER_NAME);
 	private final static MinecraftServer theMinecraft = MinecraftServer.getInstance();
 	private final static HashMap<String, BruhInfo> duckmap = new HashMap<>();
-	private final static Properties duckprop = new Properties();
+	public final static Properties duckprop = new Properties();
 	private final static MessageDigest mdt;
 	static {
 		MessageDigest a = null;
@@ -64,10 +68,15 @@ public class DuckServer extends DuckMod implements ServerMod {
 
 	private Integer tick_timer_welcome = 0;
 
+	public static boolean validPassword(String password) {
+		return !password.contains(":") || !password.contains(" ");
+	}
 	public static DuckServer getInstance() {
 		return theduck;
 	}
 	public DuckServer() {
+		CommandCompat.registerCommand(new ChangePassword());
+
 		theduck = this;
 		if (!duckdir.exists() && !duckdir.mkdirs()) {
 			lmaogger.log(Level.SEVERE, "failed to create config directory :(( at "+duckdir.toString());
@@ -136,6 +145,10 @@ public class DuckServer extends DuckMod implements ServerMod {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_usage_login")));
 					return;
 				}
+				if(!validPassword(arg)) {
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
+					return;
+				}
 				if(a.has_pass) {
 					if(Arrays.equals(a.pass, hash(arg))) {
 						verifyPlayer(username);
@@ -151,6 +164,10 @@ public class DuckServer extends DuckMod implements ServerMod {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_usage_register")));
 					return;
 				}
+				if(!validPassword(arg)) {
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
+					return;
+				}
 				if(!a.has_pass) {
 					a.pass_confirm = hash(arg);
 					a.confirming = true;
@@ -161,6 +178,10 @@ public class DuckServer extends DuckMod implements ServerMod {
 			} else if(cmd.equals("/confirm")) {
 				if(arg.equals("")) {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_usage_confirm")));
+					return;
+				}
+				if(!validPassword(arg)) {
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
 					return;
 				}
 				if(!a.confirming) {
@@ -279,6 +300,30 @@ public class DuckServer extends DuckMod implements ServerMod {
 		} catch (IOException e) {
 			lmaogger.log(Level.WARNING, "Something happened while writing the configuration: "+e.getMessage()+". Nothing will happen, I guess?");
 		}
+	}
+
+	public boolean checkPassword(String username, String password) {
+		BruhInfo a = duckmap.get(username);
+		if(a == null) return false;
+		return Arrays.equals(a.pass, hash(password));
+	}
+
+	public void removeUser(String username) {
+		duckmap.remove(username);
+		saveMap();
+	}
+
+	public void setPassword(String username, String password) {
+		BruhInfo bruh;
+		if(!duckmap.containsKey(username)) {
+			bruh = new BruhInfo(null, null);
+			duckmap.put(username, bruh);
+		} else {
+			bruh = duckmap.get(username);
+		}
+
+		bruh.pass = hash(password);
+		saveMap();
 	}
 
 	private static byte[] hexToBytes(String thing) {
