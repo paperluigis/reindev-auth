@@ -69,13 +69,15 @@ public class DuckServer extends DuckMod implements ServerMod {
 	private Integer tick_timer_welcome = 0;
 
 	public static boolean validPassword(String password) {
-		return !password.contains(":") || !password.contains(" ");
+		return !password.contains(" ") && password.trim() != "";
 	}
 	public static DuckServer getInstance() {
 		return theduck;
 	}
 	public DuckServer() {
 		CommandCompat.registerCommand(new ChangePassword());
+		CommandCompat.registerCommand(new Unregister());
+		CommandCompat.registerCommand(new DuckyAuthCommand());
 
 		theduck = this;
 		if (!duckdir.exists() && !duckdir.mkdirs()) {
@@ -125,7 +127,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 	}
 	public void onDuckLeave(String username) {
 		BruhInfo a = duckmap.get(username);
-		if(a.ep == null) return;
+		if(a == null || a.ep == null) return;
 	//	lmaogger.log(Level.INFO, "this fine individual named "+username+" just left.. :(");
 		a.logged_in = false;
 		a.ep = null;
@@ -145,10 +147,6 @@ public class DuckServer extends DuckMod implements ServerMod {
 					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_usage_login")));
 					return;
 				}
-				if(!validPassword(arg)) {
-					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
-					return;
-				}
 				if(a.has_pass) {
 					if(Arrays.equals(a.pass, hash(arg))) {
 						verifyPlayer(username);
@@ -165,7 +163,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 					return;
 				}
 				if(!validPassword(arg)) {
-					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_bad_password")));
 					return;
 				}
 				if(!a.has_pass) {
@@ -181,7 +179,7 @@ public class DuckServer extends DuckMod implements ServerMod {
 					return;
 				}
 				if(!validPassword(arg)) {
-					y.sendPacket(new Packet3Chat(duckprop.getProperty("bad_characters")));
+					y.sendPacket(new Packet3Chat(duckprop.getProperty("string_bad_password")));
 					return;
 				}
 				if(!a.confirming) {
@@ -308,22 +306,25 @@ public class DuckServer extends DuckMod implements ServerMod {
 		return Arrays.equals(a.pass, hash(password));
 	}
 
-	public void removeUser(String username) {
-		duckmap.remove(username);
+	public boolean removeUser(String username) {
+		boolean removed = duckmap.remove(username) != null;
 		saveMap();
+		return removed;
 	}
 
-	public void setPassword(String username, String password) {
+	// returns true if a new user was registere
+	public boolean setPassword(String username, String password) {
 		BruhInfo bruh;
-		if(!duckmap.containsKey(username)) {
-			bruh = new BruhInfo(null, null);
+		boolean toRegister = !duckmap.containsKey(username);
+		if(toRegister) {
+			bruh = new BruhInfo(null, hash(password));
 			duckmap.put(username, bruh);
 		} else {
 			bruh = duckmap.get(username);
+			bruh.pass = hash(password);
 		}
-
-		bruh.pass = hash(password);
 		saveMap();
+		return toRegister;
 	}
 
 	private static byte[] hexToBytes(String thing) {
